@@ -52,7 +52,7 @@ from pybaseball import playerid_lookup, statcast_batter, statcast
 
 final_df = pd.DataFrame()
 #date_list = [["2014-03-22", "2014-09-28"], ["2015-04-05", "2015-11-01"], ["2016-04-03", "2016-11-02"], ["2017-04-02", "2017-11-01"], ["2018-03-29", "2018-10-01"], ["2019-03-20", "2019-09-29"], ["2020-07-23", "2020-09-27"], ["2021-04-01", "2021-10-03"], ["2022-04-07", "2022-10-05"], ["2023-03-30", "2023-11-01"], ["2024-03-28", "2024-09-30"]]
-date_list = [["2014-03-22", "2014-09-28"]]
+date_list = [["2024-03-28", "2024-09-30"]]
 values_to_keep = ['home_run', 'single', 'double', 'triple', 'walk', 'strikeout']
 for item in date_list:
     start_date = item[0]
@@ -61,7 +61,7 @@ for item in date_list:
     filtered_df = main_df[main_df['events'].isin(values_to_keep)]
     filtered_df = filtered_df[['game_date','batter','pitcher','events','p_throws','home_team','away_team']]
     df = filtered_df.groupby(['game_date','batter','pitcher','p_throws','home_team','away_team'] + ['events']).size().unstack(fill_value=0)
-    main_df = pd.concat([final_df, df], ignore_index=True)
+    final_df = pd.concat([final_df, df], ignore_index=True)
 
 final_df.to_excel('historical_pull.xlsx',index=True)
 
