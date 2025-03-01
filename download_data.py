@@ -18,7 +18,7 @@ print('Hello')
 WEIGHT_WRC_PLUS = 0.40  # Last 30 Days wRC+
 WEIGHT_LAST_7 = 0.50    # Last 7 days performance
 WEIGHT_SPLITS = 0.10    # Full-season splits vs. LHP/RHP
-
+print(hello part 2)
 
 '''
 main_df = pd.DataFrame()
