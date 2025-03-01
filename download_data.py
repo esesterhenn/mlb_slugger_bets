@@ -12,6 +12,7 @@ model_end = (datetime.strptime(model_date,"%Y-%m-%d") - timedelta(days=1)).date(
 
 print(model_start)
 print(model_end)
+print('Hello')
 
 # Constants for weighting
 WEIGHT_WRC_PLUS = 0.40  # Last 30 Days wRC+
@@ -97,7 +98,7 @@ def process_data(wrc_plus_df, last_7_df, splits_df):
 # Save to Excel with daily tracking
 def save_to_excel(data):
     today = datetime.now().strftime("%Y-%m-%d")
-    file_name = "MLB_HR_Predictor.xlsx"
+    file_name = "mlb_slugger_bets.xlsx"
     with pd.ExcelWriter(file_name, mode='a', if_sheet_exists='new') as writer:
         data.to_excel(writer, sheet_name=today, index=False)
 
