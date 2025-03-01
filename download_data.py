@@ -73,6 +73,7 @@ def fetch_last_30_days_wrc_plus():
     )
     return wrc_plus_df
 
+
 # Fetch Last 7 Days Data
 def fetch_last_7_days():
     # Implement your existing function to fetch last 7 days data
