@@ -7,18 +7,18 @@ pd.set_option('display.max_rows', None)
 pd.set_option('display.max_columns', None)
 
 model_date = '2024-09-29'
-model_start = (datetime.strptime(model_date,"%Y-%m-%d") - timedelta(days=3650)).date()
+model_start = (datetime.strptime(model_date,"%Y-%m-%d") - timedelta(days=3)).date()
 model_end = (datetime.strptime(model_date,"%Y-%m-%d") - timedelta(days=1)).date()
 
 print(model_start)
 print(model_end)
-print('Hello')
+
 
 # Constants for weighting
 WEIGHT_WRC_PLUS = 0.40  # Last 30 Days wRC+
 WEIGHT_LAST_7 = 0.50    # Last 7 days performance
 WEIGHT_SPLITS = 0.10    # Full-season splits vs. LHP/RHP
-print(hello part 2)
+
 
 '''
 main_df = pd.DataFrame()
@@ -49,8 +49,8 @@ print(main_df[main_df['events'].isin(values_to_keep)])
 from pybaseball import playerid_lookup, statcast_batter, statcast
 main_df = statcast(start_dt=model_start.strftime("%Y-%m-%d"), end_dt=model_end.strftime("%Y-%m-%d"))
 values_to_keep = ['home_run', 'single', 'double', 'triple', 'walk', 'strikeout']
-print(main_df[main_df['events'].isin(values_to_keep)])
-
+filtered_df = main_df[main_df['events'].isin(values_to_keep)]
+print(filtered_df.head())
 
 '''
 from baseball_scraper import fangraphs
