@@ -31,7 +31,7 @@ def split_date_ranges(date_list):
 
 final_df = pd.DataFrame()
 df_list = []
-values_to_keep = ['home_run', 'single', 'double', 'triple', 'walk', 'strikeout']
+values_to_keep = ['home_run', 'single', 'double', 'triple', 'walk', 'strikeout','sac_fly','field_error']
 date_list = [["2014-03-22", "2014-09-28"], ["2015-04-05", "2015-11-01"], ["2016-04-03", "2016-11-02"], 
              ["2017-04-02", "2017-11-01"], ["2018-03-29", "2018-10-01"], ["2019-03-20", "2019-09-29"], 
              ["2020-07-23", "2020-09-27"], ["2021-04-01", "2021-10-03"], ["2022-04-07", "2022-10-05"], 
@@ -44,8 +44,13 @@ for item in split_date_ranges(date_list):
     print(str(start_date) + '_' + str(end_date))
     # Fetch data for the date range
     main_df = statcast(start_dt=start_date, end_dt=end_date)
+    
+    main_df = main_df[main_df["events"].notna() & (main_df["events"] != "truncated_pa")]
+    main_df["events"] = main_df["events"].replace("intent_walk", "walk")
+    main_df["events"] = main_df["events"].apply(lambda x: x if x in values_to_keep else "out_in_play")
+
     # Filter only relevant events
-    filtered_df = main_df[main_df['events'].isin(values_to_keep)]
+    filtered_df = main_df[main_df['events'].isin(values_to_keep + ["out_in_play"])]
     # Select only necessary columns
     filtered_df = filtered_df[['game_date','batter','pitcher','events','p_throws','home_team','away_team']]
     # Group and reshape data
@@ -56,4 +61,4 @@ for item in split_date_ranges(date_list):
 
 # Concatenate all DataFrames at once
 final_df = pd.concat(df_list, ignore_index=True)
-final_df.to_csv('historical_pull.csv',index=False)
+final_df.to_csv('historical_pull_updated.csv',index=False)
