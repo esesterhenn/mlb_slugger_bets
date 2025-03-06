@@ -1,9 +1,28 @@
 import pandas as pd
 from pybaseball import playerid_lookup, statcast_batter
+import psycopg2
 pd.set_option('display.max_rows', None)
 pd.set_option('display.max_columns', None)
 
-df = pd.read_csv('historical_pull_updated.zip')
+
+# Connect to the Neon PostgreSQL database
+connection = psycopg2.connect(
+    host='ep-restless-bread-a5n5z7ia-pooler.us-east-2.aws.neon.tech',
+    database='Baseball_Bets',
+    user='neondb_owner',
+    password='npg_V5SZnUOecGh0',  # Replace with your password
+    sslmode='require'
+)
+
+# Create a cursor object
+cursor = connection.cursor()
+
+# Query to select all rows from the table
+query = "SELECT * FROM historical_data;"
+
+# Execute the query and load the data into a DataFrame
+df = pd.read_sql(query, connection)
+
 print(df[(df['batter'] == 668939) & (df['pitcher'] == 621244)])
 combo_counts = df.groupby(["batter", "pitcher"]).size().reset_index(name="n_games")
 result = df.groupby(["batter", "pitcher"])[["double", "home_run", "single", "strikeout", "triple", "walk","out_in_play",'sac_fly','field_error']].sum().reset_index()
