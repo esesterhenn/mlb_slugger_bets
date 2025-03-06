@@ -3,7 +3,8 @@ from pybaseball import playerid_lookup, statcast_batter
 pd.set_option('display.max_rows', None)
 pd.set_option('display.max_columns', None)
 
-df = pd.read_csv('historical_pull_updated.csv')
+df = pd.read_csv('historical_pull_updated.zip')
+print(df[(df['batter'] == 668939) & (df['pitcher'] == 621244)])
 combo_counts = df.groupby(["batter", "pitcher"]).size().reset_index(name="n_games")
 result = df.groupby(["batter", "pitcher"])[["double", "home_run", "single", "strikeout", "triple", "walk","out_in_play",'sac_fly','field_error']].sum().reset_index()
 summary_stats = result.merge(combo_counts, on=["batter", "pitcher"])
@@ -18,4 +19,11 @@ max_count = summary_stats["n_games"].max()
 most_frequent_combos = summary_stats[summary_stats["n_games"] == max_count]
 
 # Charlie Blackmon vs Blake Snell
-print(summary_stats[(summary_stats['batter'] == 453568) & (summary_stats['pitcher'] == 605483)])
+print(summary_stats[(summary_stats['batter'] == 668939) & (summary_stats['pitcher'] == 621244)])
+
+# Jose Berrios: 621244
+# Adley Rutschman: 668939
+
+player = playerid_lookup('Rutschman', 'Adley')
+player_id = player.key_mlbam.iloc[0]
+print(player_id)

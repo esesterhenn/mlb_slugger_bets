@@ -37,28 +37,29 @@ date_list = [["2014-03-22", "2014-09-28"], ["2015-04-05", "2015-11-01"], ["2016-
              ["2020-07-23", "2020-09-27"], ["2021-04-01", "2021-10-03"], ["2022-04-07", "2022-10-05"], 
              ["2023-03-30", "2023-11-01"], ["2024-03-28", "2024-09-30"]]
 
-
 for item in split_date_ranges(date_list):
     start_date = item[0]
     end_date = item[1]
     print(str(start_date) + '_' + str(end_date))
     # Fetch data for the date range
     main_df = statcast(start_dt=start_date, end_dt=end_date)
-    
     main_df = main_df[main_df["events"].notna() & (main_df["events"] != "truncated_pa")]
     main_df["events"] = main_df["events"].replace("intent_walk", "walk")
     main_df["events"] = main_df["events"].apply(lambda x: x if x in values_to_keep else "out_in_play")
-
     # Filter only relevant events
     filtered_df = main_df[main_df['events'].isin(values_to_keep + ["out_in_play"])]
+    filtered_df['row_num'] = filtered_df.index
     # Select only necessary columns
-    filtered_df = filtered_df[['game_date','batter','pitcher','events','p_throws','home_team','away_team']]
+    pivot_df = filtered_df[['game_date','batter','pitcher','events','p_throws','home_team','away_team','row_num']]
     # Group and reshape data
-    df = filtered_df.groupby(['game_date','batter','pitcher','p_throws','home_team','away_team'] + ['events']).size().unstack(fill_value=0)
+    df = pivot_df.groupby(['game_date','batter','pitcher','p_throws','home_team','away_team','row_num'] + ['events']).size().unstack(fill_value=0)
     df = df.reset_index()
+    df_pitch = filtered_df[['game_date','batter','pitcher','p_throws','home_team','away_team','row_num','launch_speed','launch_angle','hit_distance_sc']]
+    df_final = df_pitch.merge(df, on=['game_date', 'batter', 'pitcher', 'p_throws', 'home_team', 'away_team','row_num'], how='left')
     # Append the grouped DataFrame to the list
-    df_list.append(df)
+    df_list.append(df_final)
 
 # Concatenate all DataFrames at once
 final_df = pd.concat(df_list, ignore_index=True)
-final_df.to_csv('historical_pull_updated.csv',index=False)
+print(final_df.head())
+#final_df.to_csv('historical_pull_updated.csv',index=False)
