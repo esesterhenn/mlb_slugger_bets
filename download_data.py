@@ -62,4 +62,4 @@ for item in split_date_ranges(date_list):
 # Concatenate all DataFrames at once
 final_df = pd.concat(df_list, ignore_index=True)
 print(final_df.head())
-#final_df.to_csv('historical_pull_updated.csv',index=False)
+final_df.to_csv('historical_pull_updated.csv',index=False)

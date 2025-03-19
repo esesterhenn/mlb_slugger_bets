@@ -4,7 +4,7 @@ import psycopg2
 pd.set_option('display.max_rows', None)
 pd.set_option('display.max_columns', None)
 
-
+'''
 # Connect to the Neon PostgreSQL database
 connection = psycopg2.connect(
     host='ep-restless-bread-a5n5z7ia-pooler.us-east-2.aws.neon.tech',
@@ -22,7 +22,8 @@ query = "SELECT * FROM historical_data;"
 
 # Execute the query and load the data into a DataFrame
 df = pd.read_sql(query, connection)
-
+'''
+df = pd.read_csv('historical_pull_updated.csv')
 #df = df.groupby(["batter", "game_date"])[["double", "home_run", "single", "strikeout", "triple", "walk","out_in_play",'sac_fly','field_error']].sum().reset_index()
 
 def calculate_rolling_sums(df,pk_cols, columns_to_sum, number_of_days):
