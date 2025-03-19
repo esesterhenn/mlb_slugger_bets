@@ -1,75 +1,81 @@
 import pandas as pd
 from pybaseball import playerid_lookup, statcast_batter
-import psycopg2
+import os
 pd.set_option('display.max_rows', None)
 pd.set_option('display.max_columns', None)
 
-'''
-# Connect to the Neon PostgreSQL database
-connection = psycopg2.connect(
-    host='ep-restless-bread-a5n5z7ia-pooler.us-east-2.aws.neon.tech',
-    database='Baseball_Bets',
-    user='neondb_owner',
-    password='npg_V5SZnUOecGh0',  # Replace with your password
-    sslmode='require'
-)
-
-# Create a cursor object
-cursor = connection.cursor()
-
-# Query to select all rows from the table
-query = "SELECT * FROM historical_data;"
-
-# Execute the query and load the data into a DataFrame
-df = pd.read_sql(query, connection)
-'''
 df = pd.read_csv('historical_pull_updated.csv')
-#df = df.groupby(["batter", "game_date"])[["double", "home_run", "single", "strikeout", "triple", "walk","out_in_play",'sac_fly','field_error']].sum().reset_index()
+df['launch_angle_optimal'] = ((df['launch_angle'] >= 8) & (df['launch_angle'] <= 32)).astype(int)
+df['launch_speed_optimal'] = (df['launch_speed'] >= 95).astype(int)
 
-def calculate_rolling_sums(df,pk_cols, columns_to_sum, number_of_days):
-    pks = df[pk_cols].drop_duplicates()
-    
-    # Convert game_date to datetime if it isn't already
+def calculate_rolling_averages_and_sums(df,avg_cols,sum_cols,window):
+    # Convert game_date to datetime
     df['game_date'] = pd.to_datetime(df['game_date'])
     
-    # Sort the data by batter and game_date
+    # Sort the DataFrame
     df = df.sort_values(['batter', 'game_date'])
-    # Create a rolling window partitioned by batter
-    # Using a 7-day window ending on the game_date
-    rolling_sums = (df.groupby('batter')
-                   .apply(lambda x: x.set_index('game_date')[columns_to_sum]
-                         .rolling(number_of_days, closed='right')
-                         .sum())
-                   .reset_index())
     
-    # Merge the rolling sums back to the original dataframe
-    result = pks.merge(rolling_sums, 
-                     on=pk_cols, 
-                     suffixes=('', '_' + number_of_days))
+    # Set game_date as index
+    df = df.set_index('game_date')
     
-    return result
+    # Calculate rolling averages
+    rolling_avg_df = (df.groupby('batter')[avg_cols]
+                     .rolling(window, closed='both')
+                     .mean()
+                     .rename(columns={col: f'{col}_{window}_avg' for col in avg_cols})
+                     )
+    
+    # Calculate rolling sums
+    rolling_sum_df = (df.groupby('batter')[sum_cols]
+                     .rolling(window, closed='both')
+                     .sum()
+                     .rename(columns={col: f'{col}_{window}_sum' for col in sum_cols})
+                     )
+    
+    # Combine the results
+    rolling_df = pd.concat([rolling_avg_df, rolling_sum_df], axis=1)
+    rolling_df = rolling_df.reset_index()
+    
+    # Group by game_date and batter to get the last value for each day
+    result_df = (rolling_df.groupby(['game_date', 'batter'])
+                .agg({f'{col}_{window}_avg': 'last' for col in avg_cols}
+                     | {f'{col}_{window}_sum': 'last' for col in sum_cols})
+                .reset_index())
+    
+    # Reorder columns
+    result_cols = (['game_date', 'batter'] + 
+                  [f'{col}_{window}_avg' for col in avg_cols] + 
+                  [f'{col}_{window}_sum' for col in sum_cols])
+    
+    result_df = result_df[result_cols]
 
-# Columns you want to sum
-columns_to_sum = ["double", "home_run", "single", "strikeout", "triple", "walk","out_in_play",'sac_fly','field_error']
+    result_df[f'AB_{window}'] = result_df[[f'single_{window}_sum', f'double_{window}_sum', f'triple_{window}_sum',f'home_run_{window}_sum',f'strikeout_{window}_sum',
+                                           f'out_in_play_{window}_sum',f'field_error_{window}_sum']].sum(axis=1)
+    result_df[f'AVG_{window}'] = result_df[[f'single_{window}_sum', f'double_{window}_sum', f'triple_{window}_sum',
+                                            f'home_run_{window}_sum']].sum(axis=1)/result_df[f'AB_{window}']
+    result_df[f'OBP_{window}'] = result_df[[f'single_{window}_sum', f'double_{window}_sum', f'triple_{window}_sum',f'home_run_{window}_sum',
+                                            f'walk_{window}_sum']].sum(axis=1)/result_df[[f'AB_{window}',f'walk_{window}_sum',f'sac_fly_{window}_sum']].sum(axis=1)
+    result_df[f'SR_{window}'] = (result_df[f'single_{window}_sum'] + result_df[f'double_{window}_sum'] * 2 + result_df[f'triple_{window}_sum'] * 3 + result_df[f'home_run_{window}_sum']*4)/result_df[f'AB_{window}']
 
-# Calculate the rolling sums
-seven_day_result = calculate_rolling_sums(df, ["batter", "game_date"],columns_to_sum, '7D')
-seven_day_result['AB_7D'] = seven_day_result[['single_7D', 'double_7D', 'triple_7D','home_run_7D','strikeout_7D','out_in_play_7D','field_error_7D']].sum(axis=1)
-seven_day_result['AVG_7D'] = seven_day_result[['single_7D', 'double_7D', 'triple_7D','home_run_7D']].sum(axis=1)/seven_day_result['AB_7D']
-seven_day_result['OBP_7D'] = seven_day_result[['single_7D', 'double_7D', 'triple_7D','home_run_7D','walk_7D']].sum(axis=1)/seven_day_result[['AB_7D','walk_7D','sac_fly_7D']].sum(axis=1)
-seven_day_result['SR_7D'] = (seven_day_result['single_7D'] + seven_day_result['double_7D'] * 2 + seven_day_result['triple_7D'] * 3 + seven_day_result['home_run_7D']*4)/seven_day_result['AB_7D']
+    
+    return result_df
 
+result_6d = calculate_rolling_averages_and_sums(df,['launch_speed', 'launch_angle','launch_angle_optimal','launch_speed_optimal'],
+                                             ["double", "home_run", "single", "strikeout", "triple", "walk","out_in_play",'sac_fly','field_error'],
+                                             '6d')
+result_29d = calculate_rolling_averages_and_sums(df,['launch_speed', 'launch_angle','launch_angle_optimal','launch_speed_optimal'],
+                                             ["double", "home_run", "single", "strikeout", "triple", "walk","out_in_play",'sac_fly','field_error'],
+                                             '29d')
+test_batter_7d = result_6d[result_6d['batter'] == 668939]
+test_batter_30d = result_6d[result_6d['batter'] == 668939]
 
-thirty_day_result = calculate_rolling_sums(df, ["batter", "game_date"],columns_to_sum, '30D')
-thirty_day_result['AB_30D'] = thirty_day_result[['single_30D', 'double_30D', 'triple_30D','home_run_30D','strikeout_30D','out_in_play_30D','field_error_30D']].sum(axis=1)
-thirty_day_result['AVG_30D'] = thirty_day_result[['single_30D', 'double_30D', 'triple_30D','home_run_30D']].sum(axis=1)/thirty_day_result['AB_30D']
-thirty_day_result['OBP_30D'] = thirty_day_result[['single_30D', 'double_30D', 'triple_30D','home_run_30D','walk_30D']].sum(axis=1)/thirty_day_result[['AB_30D','walk_30D','sac_fly_30D']].sum(axis=1)
-thirty_day_result['SR_30D'] = (thirty_day_result['single_30D'] + thirty_day_result['double_30D'] * 2 + thirty_day_result['triple_30D'] * 3 + thirty_day_result['home_run_30D']*4)/thirty_day_result['AB_30D']
+if not os.path.exists('test_data'):
+    os.makedirs('test_data')
 
+test_batter_7d.to_csv('test_data/batter_info_7D.csv', index=False)
+test_batter_30d.to_csv('test_data/batter_info_30D.csv', index=False)
 
-print(seven_day_result[seven_day_result['batter'] == 668939].head())
-print(thirty_day_result[thirty_day_result['batter'] == 668939].head())
-
+#print(result_29d[result_29d['batter'] == 668939].head())
 
 '''
 print(df[(df['batter'] == 668939) & (df['pitcher'] == 621244)])
