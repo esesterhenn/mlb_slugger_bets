@@ -8,7 +8,7 @@ df = pd.read_csv('historical_pull_updated.csv')
 df['launch_angle_optimal'] = ((df['launch_angle'] >= 8) & (df['launch_angle'] <= 32)).astype(int)
 df['launch_speed_optimal'] = (df['launch_speed'] >= 95).astype(int)
 
-def calculate_rolling_averages_and_sums(df,avg_cols,sum_cols,window,key_cols,date_col):
+def calculate_window_stats(df,avg_cols,sum_cols,window,key_cols,date_col,agg_type):
     # Convert game_date to datetime
     df[date_col] = pd.to_datetime(df[date_col])
     
@@ -21,44 +21,60 @@ def calculate_rolling_averages_and_sums(df,avg_cols,sum_cols,window,key_cols,dat
     group_cols = key_cols.copy()
     group_cols.remove(date_col)
 
-    # Calculate rolling averages
-    rolling_avg_df = (df.groupby(group_cols)[avg_cols]
+    if agg_type == 'rolling':
+        avg_df = (df.groupby(group_cols)[avg_cols]
                      .rolling(window, closed='both')
                      .mean()
-                     .rename(columns={col: f'{col}_{window}_avg' for col in avg_cols})
+                     .rename(columns={col: f'{col}_avg' for col in avg_cols})
                      )
-    
-    # Calculate rolling sums
-    rolling_sum_df = (df.groupby(group_cols)[sum_cols]
+        sum_df = (df.groupby(group_cols)[sum_cols]
                      .rolling(window, closed='both')
                      .sum()
-                     .rename(columns={col: f'{col}_{window}_sum' for col in sum_cols})
+                     .rename(columns={col: f'{col}_sum' for col in sum_cols})
+                     )
+    if agg_type == 'expanding':
+        avg_df = (df.groupby(group_cols)[avg_cols]
+                     .expanding()
+                     .mean()
+                     .rename(columns={col: f'{col}_avg' for col in avg_cols})
+                     )
+        sum_df = (df.groupby(group_cols)[sum_cols]
+                     .expanding()
+                     .sum()
+                     .rename(columns={col: f'{col}_sum' for col in sum_cols})
                      )
     
     # Combine the results
-    rolling_df = pd.concat([rolling_avg_df, rolling_sum_df], axis=1)
-    rolling_df = rolling_df.reset_index()
+    combined_df = pd.concat([avg_df, sum_df], axis=1)
+    combined_df = combined_df.reset_index()
     
     # Group by game_date and batter to get the last value for each day
-    result_df = (rolling_df.groupby(key_cols)
-                .agg({f'{col}_{window}_avg': 'last' for col in avg_cols}
-                     | {f'{col}_{window}_sum': 'last' for col in sum_cols})
+    result_df = (combined_df.groupby(key_cols)
+                .agg({f'{col}_avg': 'last' for col in avg_cols}
+                     | {f'{col}_sum': 'last' for col in sum_cols})
                 .reset_index())
     
     # Reorder columns
     result_cols = (key_cols + 
-                  [f'{col}_{window}_avg' for col in avg_cols] + 
-                  [f'{col}_{window}_sum' for col in sum_cols])
+                  [f'{col}_avg' for col in avg_cols] + 
+                  [f'{col}_sum' for col in sum_cols])
     
     result_df = result_df[result_cols]
 
-    result_df[f'AB_{window}'] = result_df[[f'single_{window}_sum', f'double_{window}_sum', f'triple_{window}_sum',f'home_run_{window}_sum',f'strikeout_{window}_sum',
-                                           f'out_in_play_{window}_sum',f'field_error_{window}_sum']].sum(axis=1)
-    result_df[f'AVG_{window}'] = result_df[[f'single_{window}_sum', f'double_{window}_sum', f'triple_{window}_sum',
-                                            f'home_run_{window}_sum']].sum(axis=1)/result_df[f'AB_{window}']
-    result_df[f'OBP_{window}'] = result_df[[f'single_{window}_sum', f'double_{window}_sum', f'triple_{window}_sum',f'home_run_{window}_sum',
-                                            f'walk_{window}_sum']].sum(axis=1)/result_df[[f'AB_{window}',f'walk_{window}_sum',f'sac_fly_{window}_sum']].sum(axis=1)
-    result_df[f'SR_{window}'] = (result_df[f'single_{window}_sum'] + result_df[f'double_{window}_sum'] * 2 + result_df[f'triple_{window}_sum'] * 3 + result_df[f'home_run_{window}_sum']*4)/result_df[f'AB_{window}']
+    result_df[f'AB'] = result_df[[f'single_sum', f'double_sum', f'triple_sum',f'home_run_sum',f'strikeout_sum',
+                                           f'out_in_play_sum',f'field_error_sum']].sum(axis=1)
+    result_df[f'AVG'] = result_df[[f'single_sum', f'double_sum', f'triple_sum',
+                                            f'home_run_sum']].sum(axis=1)/result_df[f'AB']
+    result_df[f'OBP'] = result_df[[f'single_sum', f'double_sum', f'triple_sum',f'home_run_sum',
+                                            f'walk_sum']].sum(axis=1)/result_df[[f'AB',f'walk_sum',f'sac_fly_sum']].sum(axis=1)
+    result_df[f'SR'] = (result_df[f'single_sum'] + result_df[f'double_sum'] * 2 + result_df[f'triple_sum'] * 3 + result_df[f'home_run_sum']*4)/result_df[f'AB']
+    result_df[f'single_ratio'] = result_df[f'single_sum']/result_df[f'AB']
+    result_df[f'double_ratio'] = result_df[f'double_sum']/result_df[f'AB']
+    result_df[f'triple_ratio'] = result_df[f'triple_sum']/result_df[f'AB']
+    result_df[f'home_run_ratio'] = result_df[f'home_run_sum']/result_df[f'AB']
+    result_df[f'strikeout_ratio'] = result_df[f'strikeout_sum']/result_df[f'AB']
+    result_df[f'out_in_play_ratio'] = result_df[f'out_in_play_sum']/result_df[f'AB']
+    result_df[f'field_error_ratio'] = result_df[f'field_error_sum']/result_df[f'AB']
 
     return result_df
 
@@ -98,24 +114,24 @@ def calculate_history_stats(df,avg_cols,sum_cols,key_cols,date_col):
 
     return result_df
 
-result_6d = calculate_rolling_averages_and_sums(df,['launch_speed', 'launch_angle','launch_angle_optimal','launch_speed_optimal'],
+result_6d = calculate_window_stats(df,['launch_speed', 'launch_angle','launch_angle_optimal','launch_speed_optimal'],
                                              ["double", "home_run", "single", "strikeout", "triple", "walk","out_in_play",'sac_fly','field_error'],
-                                             '6d',['game_date','batter'],'game_date')
-result_29d = calculate_rolling_averages_and_sums(df,['launch_speed', 'launch_angle','launch_angle_optimal','launch_speed_optimal'],
+                                             '6d',['game_date','batter'],'game_date','rolling')
+result_29d = calculate_window_stats(df,['launch_speed', 'launch_angle','launch_angle_optimal','launch_speed_optimal'],
                                              ["double", "home_run", "single", "strikeout", "triple", "walk","out_in_play",'sac_fly','field_error'],
-                                             '29d',['game_date','batter'],'game_date')
-result_29d_pitch_arm = calculate_rolling_averages_and_sums(df,['launch_speed', 'launch_angle','launch_angle_optimal','launch_speed_optimal'],
+                                             '29d',['game_date','batter'],'game_date','rolling')
+result_29d_pitch_arm = calculate_window_stats(df,['launch_speed', 'launch_angle','launch_angle_optimal','launch_speed_optimal'],
                                              ["double", "home_run", "single", "strikeout", "triple", "walk","out_in_play",'sac_fly','field_error'],
-                                             '29d',['game_date','batter','p_throws'],'game_date')
-batter_history_pitch_arm = calculate_history_stats(df,['launch_speed', 'launch_angle','launch_angle_optimal','launch_speed_optimal'],
+                                             '29d',['game_date','batter','p_throws'],'game_date','rolling')
+batter_history_pitch_arm = calculate_window_stats(df,['launch_speed', 'launch_angle','launch_angle_optimal','launch_speed_optimal'],
                                              ["double", "home_run", "single", "strikeout", "triple", "walk","out_in_play",'sac_fly','field_error'],
-                                             ['game_date','batter','p_throws'],'game_date')
-batter_pitcher_stats = calculate_history_stats(df,['launch_speed', 'launch_angle','launch_angle_optimal','launch_speed_optimal'],
+                                             '',['game_date','batter','p_throws'],'game_date','expanding')
+batter_pitcher_stats = calculate_window_stats(df,['launch_speed', 'launch_angle','launch_angle_optimal','launch_speed_optimal'],
                                              ["double", "home_run", "single", "strikeout", "triple", "walk","out_in_play",'sac_fly','field_error'],
-                                             ['game_date','batter','pitcher'],'game_date')
-batter_ballpark_stats = calculate_history_stats(df,['launch_speed', 'launch_angle','launch_angle_optimal','launch_speed_optimal'],
+                                             '',['game_date','batter','pitcher'],'game_date','expanding')
+batter_ballpark_stats = calculate_window_stats(df,['launch_speed', 'launch_angle','launch_angle_optimal','launch_speed_optimal'],
                                              ["double", "home_run", "single", "strikeout", "triple", "walk","out_in_play",'sac_fly','field_error'],
-                                             ['game_date','batter','home_team'],'game_date')
+                                             '',['game_date','batter','home_team'],'game_date','expanding')
 test_batter_7d = result_6d[result_6d['batter'] == 668939]
 test_batter_30d = result_29d[result_29d['batter'] == 668939]
 test_batter_30d_pitch_arm = result_29d_pitch_arm[result_29d_pitch_arm['batter'] == 668939]
@@ -123,13 +139,48 @@ test_batter_history_pitch_arm = batter_history_pitch_arm[batter_history_pitch_ar
 test_batter_pitcher_stats = batter_pitcher_stats[batter_pitcher_stats['batter'] == 668939]
 test_batter_ballpark_stats = batter_ballpark_stats[batter_ballpark_stats['batter'] == 668939]
 
+first_row = df.groupby(["game_date", "batter"]).last().reset_index()
+first_pitcher = first_row[["game_date", "batter", "pitcher", "p_throws","home_team"]]
+pred_df = df.groupby(["game_date", "batter"])["home_run"].sum().reset_index()
+pred_df["last_game_date"] = pred_df.groupby("batter")["game_date"].shift(1)
 
-print(test_batter_ballpark_stats.head())
+
+key_df = pd.merge(first_pitcher,pred_df, on=["game_date","batter"], how = "inner")
+
+key_df['game_date'] = pd.to_datetime(key_df['game_date'])
+key_df = key_df.sort_values(by=["batter", "game_date"])
+key_df['p_throws_date'] = key_df.groupby(['batter', 'p_throws'])['game_date'].shift(1)
+key_df['pitcher_date'] = key_df.groupby(['batter', 'pitcher'])['game_date'].shift(1)
+key_df['home_date'] = key_df.groupby(['batter', 'home_team'])['game_date'].shift(1)
+
+
+
+model_df = pd.merge(key_df,result_6d,left_on=['last_game_date','batter'], right_on = ['game_date','batter'], how="inner", suffixes=("","_7D"))
+model_df = model_df.drop(columns=["game_date_7D"])
+model_df = pd.merge(model_df,result_29d,left_on=['last_game_date','batter'], right_on = ['game_date','batter'], how="inner", suffixes=("","_30D"))
+model_df = model_df.drop(columns=["game_date_30D"])
+model_df = pd.merge(model_df,result_29d_pitch_arm,left_on=['p_throws_date','batter','p_throws'], right_on = ['game_date','batter','p_throws'], how="inner", suffixes=("","_30D_arm"))
+model_df = model_df.drop(columns=["game_date_30D_arm"])
+model_df = pd.merge(model_df,batter_history_pitch_arm,left_on=['p_throws_date','batter','p_throws'], right_on = ['game_date','batter','p_throws'], how="inner", suffixes=("","_hist_arm"))
+model_df = model_df.drop(columns=["game_date_hist_arm"])
+model_df = pd.merge(model_df,batter_pitcher_stats,left_on=['pitcher_date','batter','pitcher'], right_on = ['game_date','batter','pitcher'], how="inner", suffixes=("","_hist_pitcher"))
+model_df = model_df.drop(columns=["game_date_hist_pitcher"])
+model_df = pd.merge(model_df,batter_ballpark_stats,left_on=['home_date','batter','home_team'], right_on = ['game_date','batter','home_team'], how="inner", suffixes=("","_hist_home"))
+model_df = model_df.drop(columns=["game_date_hist_home"])
+
+model_df = model_df[
+    (model_df['AB'] >= 15) &
+    (model_df['AB_30D'] >= 60) &
+    (model_df['AB_30D_arm'] >= 30) &
+    (model_df['AB_hist_arm'] >= 100) &
+    (model_df['AB_hist_pitcher'] >= 5) &
+    (model_df['AB_hist_home'] >= 10)
+]
 
 if not os.path.exists('test_data'):
     os.makedirs('test_data')
 
-#test_batter_7d.to_csv('test_data/batter_info_7D.csv', index=False)
+model_df.to_csv('test_data/model_data.csv', index=False)
 #test_batter_30d.to_csv('test_data/batter_info_30D.csv', index=False)
 
 #print(result_29d[result_29d['batter'] == 668939].head())
@@ -137,8 +188,8 @@ if not os.path.exists('test_data'):
 '''
 # Set a threshold for minimum at bats for each of these
 # Last 7 Days: Batting average (>.300), at least 1 homerun (count number of home runs), all stats: Threshold is 15 at bats: DONE
-# Last 30 days: Average launch angle, % of hits between 8 and 32 degrees?, launch speed > 95 mph: Threshold is 7 day x3: DONE
-# Batter vs left handers and right handers (last 30 days or career?) all stats: Threshold is 30 at bats and career is 150: DONE
+# Last 30 days: Average launch angle, % of hits between 8 and 32 degrees?, launch speed > 95 mph: Threshold is 7 day x4: DONE
+# Batter vs left handers and right handers (last 30 days or career?) all stats: Threshold is 30 at bats and career is 100: DONE
 # Batter vs ballpark all stats (career) what if the team gets a new ballpark? (Potentially braves and rangers new stadiums): Threshold is 10 at bats
 # Batter vs Pitcher: Batting average (>.300), at least 1 homerun (count number of home runs), all stats: Threshold is 5 at bats: DONE
 
