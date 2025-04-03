@@ -21,8 +21,7 @@ df = pd.read_csv('test_data/model_data.csv')
 df['home_run_predict'] = (df['home_run'] >= 1).astype(int)
 df['game_date'] = pd.to_datetime(df['game_date'])
 
-min_years = 10
-min_days = min_years * 365
+min_years = 5
 
 features = ['launch_speed_avg', 'launch_angle_avg', 'launch_angle_optimal_avg', 'launch_speed_optimal_avg','AVG', 'OBP', 'SR', 'single_ratio', 'double_ratio', 'triple_ratio', 'home_run_ratio', 'strikeout_ratio', 'out_in_play_ratio', 'field_error_ratio',
 'launch_speed_avg_30D', 'launch_angle_avg_30D', 'launch_angle_optimal_avg_30D', 'launch_speed_optimal_avg_30D','AVG_30D', 'OBP_30D', 'SR_30D', 'single_ratio_30D', 'double_ratio_30D', 'triple_ratio_30D', 'home_run_ratio_30D', 'strikeout_ratio_30D', 'out_in_play_ratio_30D', 'field_error_ratio_30D',
@@ -34,39 +33,55 @@ features = ['launch_speed_avg', 'launch_angle_avg', 'launch_angle_optimal_avg', 
 
 # Create training and testing sets
 start_date = df['game_date'].min()
-end_date = start_date + pd.DateOffset(days=min_days)
-filtered_df = df[df['game_date'] > end_date]
-unique_sorted_dates = sorted(filtered_df['game_date'].unique())
-pred_dates_list = list(unique_sorted_dates)
+print(start_date)
+end_date = df['game_date'].max()
+print(end_date)
+start_year = start_date.year
+end_year = start_year + min_years
+year_list = list(range(end_year,end_date.year+1))
+print(year_list)
+df['year'] = df['game_date'].dt.year
 
 # Create a function to train and predict
-def train_and_predict(date, df, features):
-    print(f"Processing date: {date}")
+def train_and_predict(year, df, features):
+    print(f"Processing date: {year}")
     # Training and testing data for current date
-    train_data = df[df['game_date'] < date].copy()
-    test_data = df[df['game_date'] == date].copy()
+    train_data = df[df['year'] < year].copy()
+    test_data = df[df['year'] == year].copy()
     x_train = train_data[features]
     y_train = train_data['home_run_predict']
     
+
     # Train model
     model = RandomForestClassifier(random_state=42, class_weight='balanced', n_estimators=200, 
-                                   min_samples_split=20, min_samples_leaf=10, max_samples=0.8)
+                                   min_samples_split=30, min_samples_leaf=8, max_samples=0.8)
     model.fit(x_train, y_train)
     
     # Test model
     x_test = test_data[features]
-    test_data['prediction'] = model.predict(x_test)  # Assign predictions directly to test data
+    #test_data['prediction'] = model.predict(x_test)  # Assign predictions directly to test data
     test_data['probability'] = model.predict_proba(x_test)[:, 1]
+    test_data['prediction'] = (test_data['probability']>0.4).astype(int)
     
     # Select relevant columns
     test_small = test_data[['game_date', 'batter', 'home_run_predict', 'prediction', 'probability']]
     return test_small
 
-predictions = Parallel(n_jobs=-1)(delayed(train_and_predict)(date, df, features) for date in pred_dates_list)
+predictions = Parallel(n_jobs=-1)(delayed(train_and_predict)(year, df, features) for year in year_list)
 predictions_df = pd.concat(predictions, ignore_index=True)
 
 # Display final prediction DataFrame
-print(predictions_df[predictions_df['batter'] == 668939])
+
+decision_matrix = pd.crosstab(predictions_df['home_run_predict'], predictions_df['prediction'])
+accuracy = np.mean(predictions_df['home_run_predict'] == predictions_df['prediction'])
+
+mean_prob = predictions_df['probability'].mean()
+predictions_df['probability_accuracy'] = (predictions_df['probability'] - mean_prob) * predictions_df['home_run_predict']
+mean_prob_acc = predictions_df['probability_accuracy'].mean()
+print(decision_matrix)
+print(accuracy)
+print(mean_prob_acc)
+
 '''
 feature_importances = model.feature_importances_
 
