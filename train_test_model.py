@@ -17,7 +17,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 pd.set_option('display.max_rows', None)
 pd.set_option('display.max_columns', None)
 
-df = pd.read_csv('test_data/model_data.csv')
+df = pd.read_csv('model_data.csv')
 df['home_run_predict'] = (df['home_run'] >= 1).astype(int)
 df['game_date'] = pd.to_datetime(df['game_date'])
 
