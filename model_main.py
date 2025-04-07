@@ -5,6 +5,7 @@ pd.set_option('display.max_rows', None)
 pd.set_option('display.max_columns', None)
 
 df = pd.read_csv('historical_pull_updated.csv')
+print(df.head())
 df['launch_angle_optimal'] = ((df['launch_angle'] >= 8) & (df['launch_angle'] <= 32)).astype(int)
 df['launch_speed_optimal'] = (df['launch_speed'] >= 95).astype(int)
 
@@ -116,22 +117,22 @@ def calculate_history_stats(df,avg_cols,sum_cols,key_cols,date_col):
 
 result_6d = calculate_window_stats(df,['launch_speed', 'launch_angle','launch_angle_optimal','launch_speed_optimal'],
                                              ["double", "home_run", "single", "strikeout", "triple", "walk","out_in_play",'sac_fly','field_error'],
-                                             '6d',['game_date','batter'],'game_date','rolling')
+                                             '6d',['game_date','batter','game_num_in_day','game_pk'],'game_date','rolling')
 result_29d = calculate_window_stats(df,['launch_speed', 'launch_angle','launch_angle_optimal','launch_speed_optimal'],
                                              ["double", "home_run", "single", "strikeout", "triple", "walk","out_in_play",'sac_fly','field_error'],
-                                             '29d',['game_date','batter'],'game_date','rolling')
+                                             '29d',['game_date','batter','game_num_in_day','game_pk'],'game_date','rolling')
 result_29d_pitch_arm = calculate_window_stats(df,['launch_speed', 'launch_angle','launch_angle_optimal','launch_speed_optimal'],
                                              ["double", "home_run", "single", "strikeout", "triple", "walk","out_in_play",'sac_fly','field_error'],
-                                             '29d',['game_date','batter','p_throws'],'game_date','rolling')
+                                             '29d',['game_date','batter','p_throws','game_num_in_day','game_pk'],'game_date','rolling')
 batter_history_pitch_arm = calculate_window_stats(df,['launch_speed', 'launch_angle','launch_angle_optimal','launch_speed_optimal'],
                                              ["double", "home_run", "single", "strikeout", "triple", "walk","out_in_play",'sac_fly','field_error'],
-                                             '',['game_date','batter','p_throws'],'game_date','expanding')
+                                             '',['game_date','batter','p_throws','game_num_in_day','game_pk'],'game_date','expanding')
 batter_pitcher_stats = calculate_window_stats(df,['launch_speed', 'launch_angle','launch_angle_optimal','launch_speed_optimal'],
                                              ["double", "home_run", "single", "strikeout", "triple", "walk","out_in_play",'sac_fly','field_error'],
-                                             '',['game_date','batter','pitcher'],'game_date','expanding')
+                                             '',['game_date','batter','pitcher','game_num_in_day','game_pk'],'game_date','expanding')
 batter_ballpark_stats = calculate_window_stats(df,['launch_speed', 'launch_angle','launch_angle_optimal','launch_speed_optimal'],
                                              ["double", "home_run", "single", "strikeout", "triple", "walk","out_in_play",'sac_fly','field_error'],
-                                             '',['game_date','batter','home_team'],'game_date','expanding')
+                                             '',['game_date','batter','home_team','game_num_in_day','game_pk'],'game_date','expanding')
 test_batter_7d = result_6d[result_6d['batter'] == 668939]
 test_batter_30d = result_29d[result_29d['batter'] == 668939]
 test_batter_30d_pitch_arm = result_29d_pitch_arm[result_29d_pitch_arm['batter'] == 668939]
@@ -139,19 +140,21 @@ test_batter_history_pitch_arm = batter_history_pitch_arm[batter_history_pitch_ar
 test_batter_pitcher_stats = batter_pitcher_stats[batter_pitcher_stats['batter'] == 668939]
 test_batter_ballpark_stats = batter_ballpark_stats[batter_ballpark_stats['batter'] == 668939]
 
-first_row = df.groupby(["game_date", "batter"]).last().reset_index()
-first_pitcher = first_row[["game_date", "batter", "pitcher", "p_throws","home_team"]]
-pred_df = df.groupby(["game_date", "batter"])["home_run"].sum().reset_index()
-pred_df["last_game_date"] = pred_df.groupby("batter")["game_date"].shift(1)
+print(test_batter_7d)
+'''
+first_row = df.groupby(["game_date", "batter",'game_num_in_day','game_pk']).last().reset_index()
+first_pitcher = first_row[["game_date", "batter",'game_num_in_day','game_pk', "pitcher", "p_throws","home_team"]]
+pred_df = df.groupby(["game_date", "batter",'game_num_in_day','game_pk'])["home_run"].sum().reset_index()
+pred_df["last_game_date"] = pred_df.groupby(["batter",'game_num_in_day','game_pk'])["game_date"].shift(1)
 
 
-key_df = pd.merge(first_pitcher,pred_df, on=["game_date","batter"], how = "inner")
+key_df = pd.merge(first_pitcher,pred_df, on=["game_date","batter",'game_num_in_day','game_pk'], how = "inner")
 
 key_df['game_date'] = pd.to_datetime(key_df['game_date'])
-key_df = key_df.sort_values(by=["batter", "game_date"])
-key_df['p_throws_date'] = key_df.groupby(['batter', 'p_throws'])['game_date'].shift(1)
-key_df['pitcher_date'] = key_df.groupby(['batter', 'pitcher'])['game_date'].shift(1)
-key_df['home_date'] = key_df.groupby(['batter', 'home_team'])['game_date'].shift(1)
+key_df = key_df.sort_values(by=["batter", "game_date",'game_num_in_day','game_pk'])
+key_df['p_throws_date'] = key_df.groupby(['batter', 'p_throws','game_num_in_day','game_pk'])['game_date'].shift(1)
+key_df['pitcher_date'] = key_df.groupby(['batter', 'pitcher','game_num_in_day','game_pk'])['game_date'].shift(1)
+key_df['home_date'] = key_df.groupby(['batter', 'home_team','game_num_in_day','game_pk'])['game_date'].shift(1)
 
 
 
@@ -180,12 +183,9 @@ model_df = model_df[
 if not os.path.exists('test_data'):
     os.makedirs('test_data')
 
-model_df.to_csv('test_data/model_data.csv', index=False)
-#test_batter_30d.to_csv('test_data/batter_info_30D.csv', index=False)
+#model_df.to_csv('test_data/model_data.csv', index=False)
 
-#print(result_29d[result_29d['batter'] == 668939].head())
 
-'''
 # Set a threshold for minimum at bats for each of these
 # Last 7 Days: Batting average (>.300), at least 1 homerun (count number of home runs), all stats: Threshold is 15 at bats: DONE
 # Last 30 days: Average launch angle, % of hits between 8 and 32 degrees?, launch speed > 95 mph: Threshold is 7 day x4: DONE
