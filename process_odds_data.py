@@ -2,6 +2,7 @@ import pandas as pd
 from pybaseball import playerid_lookup, team_ids
 
 odds_df = pd.read_csv('odds_api_hr_odds.csv')
+odds_df = odds_df[odds_df['sports_book'].isin(['BetMGM', 'Caesars', 'DraftKings', 'FanDuel'])]
 
 team_df = pd.read_csv('odds_stats_team_map.csv')
 
@@ -25,10 +26,13 @@ odds_df = odds_df.rename(columns={
 
 
 odds_df[['first_name', 'last_name']] = odds_df['batter_name'].str.split(' ', n=1, expand=True)
+total_rows = len(odds_df)
 
 all_player_odds = pd.DataFrame()
 
 for index, row in odds_df.iterrows():
+    progress = (index + 1) / total_rows * 100
+    print(f"Processing row {index + 1} of {total_rows} ({progress:.2f}%)")
     player_data = playerid_lookup(row['last_name'], row['first_name'], fuzzy=True)[['key_mlbam']].drop_duplicates()
     player_data['game_date'] = row['game_date']
     player_data['game_num_in_day'] = row['game_num_in_day']
