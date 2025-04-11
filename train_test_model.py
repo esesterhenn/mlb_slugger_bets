@@ -2,6 +2,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier, plot_tree
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.calibration import CalibratedClassifierCV
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.metrics import accuracy_score
@@ -47,33 +48,73 @@ def train_and_predict(year, df, features):
     print(f"Processing date: {year}")
     # Training and testing data for current date
     train_data = df[df['year'] < year].copy()
+    unique_dates = sorted(train_data['game_date'].unique())
+    date_to_index = {date: idx for idx, date in enumerate(unique_dates)}
+    train_data['recency_index'] = train_data['game_date'].map(date_to_index)
+    train_data['model_weight'] = (train_data['recency_index']**2) / (train_data['recency_index']**2).sum()
+
     test_data = df[df['year'] == year].copy()
     x_train = train_data[features]
     y_train = train_data['home_run_predict']
-    
+    x_cal = x_train.copy()
+    y_cal = y_train.copy()
 
     # Train model
-    model = RandomForestClassifier(random_state=42, class_weight='balanced', n_estimators=200, 
+    model = RandomForestClassifier(random_state=42, n_estimators=200, 
                                    min_samples_split=30, min_samples_leaf=8, max_samples=0.8)
-    model.fit(x_train, y_train)
-    
+    model.fit(x_train, y_train, sample_weight=train_data['model_weight'])
+    calibrated_rf = CalibratedClassifierCV(estimator=model, method='sigmoid', cv='prefit')
+    calibrated_rf.fit(x_cal, y_cal)
+
     # Test model
     x_test = test_data[features]
     #test_data['prediction'] = model.predict(x_test)  # Assign predictions directly to test data
-    test_data['probability'] = model.predict_proba(x_test)[:, 1]
-    test_data['prediction'] = (test_data['probability']>0.4).astype(int)
-    
+    #test_data['probability'] = model.predict_proba(x_test)[:, 1]
+    test_data['probability'] = calibrated_rf.predict_proba(x_test)[:, 1]
+
     # Select relevant columns
-    test_small = test_data[['game_date', 'batter', 'home_run_predict', 'prediction', 'probability']]
+    test_small = test_data[['game_date', 'batter','batter_first_name','batter_last_name','game_num_in_day','game_pk','home_team', 'home_run_predict', 'probability']]
     return test_small
 
 predictions = Parallel(n_jobs=-1)(delayed(train_and_predict)(year, df, features) for year in year_list)
 predictions_df = pd.concat(predictions, ignore_index=True)
 
+odds_df = pd.read_csv('formatted_odds.csv')
+odds_df['DraftKings.over_prob'] = 1/odds_df['DraftKings.over_price']
+odds_df['DraftKings.under_prob'] = 1/odds_df['DraftKings.under_price']
+odds_df['game_date'] = pd.to_datetime(odds_df['game_date'])
+
+predictions_df = predictions_df.merge(odds_df[['game_date','batter','game_num_in_day','game_pk','home_team','DraftKings.point','DraftKings.over_price','DraftKings.under_price','DraftKings.over_prob','DraftKings.under_prob']], on=['game_date','batter','game_num_in_day','game_pk','home_team'], how="left")
+
+print(predictions_df[predictions_df['game_date']=='2023-05-03'])
+
+predictions_df['std_prediction'] = (predictions_df['probability']>0.4).astype(int)
+conditions = [
+    predictions_df['probability'] > predictions_df['DraftKings.over_prob'],
+    (1-predictions_df['probability']) > predictions_df['DraftKings.under_prob']
+]
+predictions_df['odds_prediction'] = np.select(conditions, [1,0], default=np.nan)
+
 # Display final prediction DataFrame
 
-decision_matrix = pd.crosstab(predictions_df['home_run_predict'], predictions_df['prediction'])
-accuracy = np.mean(predictions_df['home_run_predict'] == predictions_df['prediction'])
+decision_matrix = pd.crosstab(predictions_df['home_run_predict'], predictions_df['odds_prediction'])
+accuracy = np.mean(predictions_df['home_run_predict'] == predictions_df['odds_prediction'])
+
+hr_bet = predictions_df[(predictions_df['odds_prediction'] == 1) & (predictions_df['DraftKings.over_price'].notnull())]
+hr_bet['odds_difference'] = hr_bet['probability'] - hr_bet['DraftKings.over_prob']
+hr_bet['bet_amount_optimal'] = hr_bet.groupby('game_date')['odds_difference'].transform(
+    lambda x: (x / x.sum()) * len(x)
+)
+hr_bet['correct_prediction_naive'] = hr_bet['home_run_predict'] * hr_bet['odds_prediction']
+hr_bet['winnings_naive'] = hr_bet['correct_prediction_naive'] * (hr_bet['DraftKings.over_price'])
+hr_bet['correct_prediction_optimal'] = hr_bet['home_run_predict'] * hr_bet['bet_amount_optimal']
+hr_bet['winnings_optimal'] = hr_bet['correct_prediction_optimal'] * (hr_bet['DraftKings.over_price'])
+
+average_winnings = hr_bet['winnings_naive'].sum() / hr_bet['DraftKings.over_price'].notnull().sum()
+print('Naive Profitability:' + str(average_winnings))
+
+optimal_winnings = hr_bet['winnings_optimal'].sum() / hr_bet['DraftKings.over_price'].notnull().sum()
+print('Optimal Profitability:' + str(optimal_winnings))
 
 mean_prob = predictions_df['probability'].mean()
 predictions_df['probability_accuracy'] = (predictions_df['probability'] - mean_prob) * predictions_df['home_run_predict']
