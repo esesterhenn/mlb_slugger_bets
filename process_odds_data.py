@@ -2,7 +2,7 @@ import pandas as pd
 from pybaseball import playerid_lookup, team_ids
 
 odds_df = pd.read_csv('odds_api_hr_odds.csv')
-odds_df = odds_df[odds_df['sports_book'].isin(['BetMGM', 'Caesars', 'DraftKings', 'FanDuel'])]
+odds_df = odds_df[odds_df['sports_book'].isin(['DraftKings'])]
 
 team_df = pd.read_csv('odds_stats_team_map.csv')
 

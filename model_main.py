@@ -128,27 +128,32 @@ def calculate_history_stats(df,avg_cols,sum_cols,key_cols,date_col):
 result_6d = calculate_window_stats(df,['launch_speed', 'launch_angle','launch_angle_optimal','launch_speed_optimal'],
                                              ["double", "home_run", "single", "strikeout", "triple", "walk","out_in_play",'sac_fly','field_error'],
                                              '6d',['game_date','batter'],'game_date','rolling')
+result_6d = result_6d[(result_6d['AB'] >= 15)]
+
 result_29d = calculate_window_stats(df,['launch_speed', 'launch_angle','launch_angle_optimal','launch_speed_optimal'],
                                              ["double", "home_run", "single", "strikeout", "triple", "walk","out_in_play",'sac_fly','field_error'],
                                              '29d',['game_date','batter'],'game_date','rolling')
+result_29d = result_29d[(result_29d['AB'] >= 60)]
+
 result_29d_pitch_arm = calculate_window_stats(df,['launch_speed', 'launch_angle','launch_angle_optimal','launch_speed_optimal'],
                                              ["double", "home_run", "single", "strikeout", "triple", "walk","out_in_play",'sac_fly','field_error'],
                                              '29d',['game_date','batter','p_throws'],'game_date','rolling')
+result_29d_pitch_arm = result_29d_pitch_arm[(result_29d_pitch_arm['AB'] >= 30)]
+
 batter_history_pitch_arm = calculate_window_stats(df,['launch_speed', 'launch_angle','launch_angle_optimal','launch_speed_optimal'],
                                              ["double", "home_run", "single", "strikeout", "triple", "walk","out_in_play",'sac_fly','field_error'],
                                              '',['game_date','batter','p_throws'],'game_date','expanding')
+batter_history_pitch_arm = batter_history_pitch_arm[(batter_history_pitch_arm['AB'] >= 100)]
+
 batter_pitcher_stats = calculate_window_stats(df,['launch_speed', 'launch_angle','launch_angle_optimal','launch_speed_optimal'],
                                              ["double", "home_run", "single", "strikeout", "triple", "walk","out_in_play",'sac_fly','field_error'],
                                              '',['game_date','batter','pitcher'],'game_date','expanding')
+batter_pitcher_stats = batter_pitcher_stats[(batter_pitcher_stats['AB'] >= 5)]
+
 batter_ballpark_stats = calculate_window_stats(df,['launch_speed', 'launch_angle','launch_angle_optimal','launch_speed_optimal'],
                                              ["double", "home_run", "single", "strikeout", "triple", "walk","out_in_play",'sac_fly','field_error'],
                                              '',['game_date','batter','home_team'],'game_date','expanding')
-test_batter_7d = result_6d[result_6d['batter'] == 668939]
-test_batter_30d = result_29d[result_29d['batter'] == 668939]
-test_batter_30d_pitch_arm = result_29d_pitch_arm[result_29d_pitch_arm['batter'] == 668939]
-test_batter_history_pitch_arm = batter_history_pitch_arm[batter_history_pitch_arm['batter'] == 668939]
-test_batter_pitcher_stats = batter_pitcher_stats[batter_pitcher_stats['batter'] == 668939]
-test_batter_ballpark_stats = batter_ballpark_stats[batter_ballpark_stats['batter'] == 668939]
+batter_ballpark_stats = batter_ballpark_stats[(batter_ballpark_stats['AB'] >= 10)]
 
 
 first_row = df.groupby(["game_date", "batter",'game_num_in_day','game_pk']).last().reset_index()
@@ -164,27 +169,19 @@ key_df = key_df.merge(get_last_date(key_df,['game_date','batter','pitcher'],'gam
 key_df = key_df.merge(get_last_date(key_df,['game_date','batter','home_team'],'game_date','home_date'), on=['game_date','batter','home_team'], how="left")
 
 
-model_df = pd.merge(key_df,result_6d,left_on=['last_game_date','batter'], right_on = ['game_date','batter'], how="inner", suffixes=("","_7D"))
+model_df = pd.merge(key_df,result_6d,left_on=['last_game_date','batter'], right_on = ['game_date','batter'], how="left", suffixes=("","_7D"))
 model_df = model_df.drop(columns=["game_date_7D"])
-model_df = pd.merge(model_df,result_29d,left_on=['last_game_date','batter'], right_on = ['game_date','batter'], how="inner", suffixes=("","_30D"))
+model_df = pd.merge(model_df,result_29d,left_on=['last_game_date','batter'], right_on = ['game_date','batter'], how="left", suffixes=("","_30D"))
 model_df = model_df.drop(columns=["game_date_30D"])
-model_df = pd.merge(model_df,result_29d_pitch_arm,left_on=['p_throws_date','batter','p_throws'], right_on = ['game_date','batter','p_throws'], how="inner", suffixes=("","_30D_arm"))
+model_df = pd.merge(model_df,result_29d_pitch_arm,left_on=['p_throws_date','batter','p_throws'], right_on = ['game_date','batter','p_throws'], how="left", suffixes=("","_30D_arm"))
 model_df = model_df.drop(columns=["game_date_30D_arm"])
-model_df = pd.merge(model_df,batter_history_pitch_arm,left_on=['p_throws_date','batter','p_throws'], right_on = ['game_date','batter','p_throws'], how="inner", suffixes=("","_hist_arm"))
+model_df = pd.merge(model_df,batter_history_pitch_arm,left_on=['p_throws_date','batter','p_throws'], right_on = ['game_date','batter','p_throws'], how="left", suffixes=("","_hist_arm"))
 model_df = model_df.drop(columns=["game_date_hist_arm"])
-model_df = pd.merge(model_df,batter_pitcher_stats,left_on=['pitcher_date','batter','pitcher'], right_on = ['game_date','batter','pitcher'], how="inner", suffixes=("","_hist_pitcher"))
+model_df = pd.merge(model_df,batter_pitcher_stats,left_on=['pitcher_date','batter','pitcher'], right_on = ['game_date','batter','pitcher'], how="left", suffixes=("","_hist_pitcher"))
 model_df = model_df.drop(columns=["game_date_hist_pitcher"])
-model_df = pd.merge(model_df,batter_ballpark_stats,left_on=['home_date','batter','home_team'], right_on = ['game_date','batter','home_team'], how="inner", suffixes=("","_hist_home"))
+model_df = pd.merge(model_df,batter_ballpark_stats,left_on=['home_date','batter','home_team'], right_on = ['game_date','batter','home_team'], how="left", suffixes=("","_hist_home"))
 model_df = model_df.drop(columns=["game_date_hist_home"])
 
-model_df = model_df[
-    (model_df['AB'] >= 15) &
-    (model_df['AB_30D'] >= 60) &
-    (model_df['AB_30D_arm'] >= 30) &
-    (model_df['AB_hist_arm'] >= 100) &
-    (model_df['AB_hist_pitcher'] >= 5) &
-    (model_df['AB_hist_home'] >= 10)
-]
 
 model_df.to_csv('model_data.csv', index=False)
 
